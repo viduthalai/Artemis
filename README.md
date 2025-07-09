@@ -29,7 +29,18 @@ The backtesting system allows you to test trading strategies using historical da
 
 #### Usage:
 ```bash
-./backtest/run_backtest.sh --input example/stock_signals.csv  --initial_balance 10000
+# Run stock backtest
+./backtest/stocks/run_backtest_stocks.sh --input example/stock_signals.csv --initial_balance 10000
+```
+
+#### Directory Structure:
+```
+backtest/
+├── stocks/
+│   ├── backtest_stocks.py    # Main backtesting logic
+│   ├── run_backtest_stocks.sh # Execution script
+│   └── requirements.txt      # Python dependencies
+└── README.md                # Backtesting documentation
 ```
 
 #### Input Format:
