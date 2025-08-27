@@ -1,0 +1,24 @@
+{
+  "description": "This is a template configuration file. The application now uses environment variables instead of JSON configuration.",
+  "environment_variables": {
+    "required": {
+      "ALPACA_API_KEY": "Your Alpaca API key",
+      "ALPACA_SECRET_KEY": "Your Alpaca secret key"
+    },
+    "optional": {
+      "ALPACA_BASE_URL": "https://paper-api.alpaca.markets (default)",
+      "DYNAMODB_REGION": "us-east-1 (default)",
+      "SIGNALS_TABLE_NAME": "artemis-signals (default)",
+      "ALLOCATION_TABLE_NAME": "artemis-allocation-windows (default)",
+      "MAX_SIGNALS_PER_WINDOW": "39 (default)",
+      "WINDOW_DURATION_DAYS": "90 (default)",
+      "DEFAULT_ALLOCATION_AMOUNT": "1000.0 (default)",
+      "IS_PAPER_TRADING": "true (default)"
+    }
+  },
+  "example_usage": {
+    "local_development": "export ALPACA_API_KEY=your_key && export ALPACA_SECRET_KEY=your_secret && go run cmd/main.go",
+    "docker": "docker run -e ALPACA_API_KEY=your_key -e ALPACA_SECRET_KEY=your_secret artemis-bot",
+    "aws_lambda": "Set environment variables in Lambda function configuration"
+  }
+}

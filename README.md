@@ -1,116 +1,151 @@
-# Artemis Trading System
+# Artemis - Multi-Goal Repository
 
-Artemis is a sophisticated trading system that combines automated trading with comprehensive backtesting capabilities. The system is designed to execute trades based on predefined signals while incorporating advanced features like dip-buying strategies and technical analysis.
+This repository contains multiple projects and tools. Currently, it includes:
 
-## Components
+## 📊 Backtesting Project
 
-### 1. Backtesting System
+A comprehensive stock signal backtesting system that analyzes trading strategies using historical market data from Alpaca.
 
-The backtesting system allows you to test trading strategies using historical data. It provides detailed analysis of trade performance and account metrics.
+### Features
 
-#### Key Features:
-- **Signal-based Trading**: Execute trades based on predefined buy/sell signals
-- **Dip-Buying Strategy**: Implements an intelligent dip-buying mechanism with the following conditions:
-  - Price below 20-day SMA (downtrend)
-  - Price dropped at least 10% from recent high
-  - 20-day SMA above current price (overall uptrend)
-  - Current price below initial buy price
-  - Minimum 5 days between buys
-- **Position Management**: 
-  - Maximum of 3 buys per position (initial + 2 dip buys)
-  - Same allocation percentage for each buy
-  - Fractional share support
-- **Performance Metrics**:
-  - Total return
-  - Annualized return
-  - Individual trade performance
-  - Position tracking
-  - Cash management
+- **Basic Backtesting**: Simple buy-and-hold strategy analysis
+- **Enhanced Strategies**: Multiple advanced trading strategies including:
+  - Staggered Entry (80% at buy date, 20% during dips)
+  - Take Profit with Trailing Stop (15% take profit, 15% trailing stop)
+  - Simple Trailing Stop (15% trailing stop only)
+  - Staggered Entry + Trailing Stop (combination strategy)
+- **Performance Metrics**: Win rate, average returns, hold times, and annualized returns
+- **Data Fallback**: Intelligent handling of missing historical data
+- **Comprehensive Reporting**: Detailed results for each strategy
 
-#### Usage:
+### Project Structure
+
+```
+Artemis/
+├── backtesting/                 # Backtesting project
+│   ├── cmd/                    # Command-line application
+│   │   └── main.go            # Main entry point
+│   ├── internal/               # Internal packages
+│   │   ├── types.go           # Shared types and basic functions
+│   │   └── enhanced_backtest.go # Enhanced strategy implementations
+│   ├── data/                   # Data files
+│   │   └── example/           # Example CSV files
+│   ├── configs/                # Configuration files (future)
+│   └── pkg/                    # Public packages (future)
+├── go.mod                      # Go module file
+├── go.sum                      # Go dependencies
+└── README.md                   # This file
+```
+
+### Setup
+
+1. **Install Dependencies**:
+   ```bash
+   make deps
+   ```
+
+2. **Set Environment Variables**:
+   ```bash
+   export ALPACA_API_KEY="your_api_key"
+   export ALPACA_SECRET_KEY="your_secret_key"
+   ```
+
+3. **Build and Run** (using Makefile):
+   ```bash
+   # Build the application
+   make build
+   
+   # Or build and run in one command
+   make run
+   
+   # Or just run (if already built)
+   make run-only
+   ```
+
+4. **Alternative Manual Build**:
+   ```bash
+   cd backtesting
+   go build -o artemis-backtest ./cmd
+   ./artemis-backtest
+   ```
+
+### CSV Input Format
+
+The application reads stock signals from `backtesting/data/example/stock_signals.csv`:
+
+```csv
+ticker,buydate,selldate
+AAPL,2024-01-15,2024-02-15
+GOOGL,2024-01-20,2024-02-20
+```
+
+### Output
+
+The application provides comprehensive backtesting results including:
+
+- **Basic Backtest Results**: Simple buy-and-hold performance
+- **Enhanced Strategy Comparison**: Performance of all 5 strategies
+- **Individual Signal Results**: Detailed results for each signal
+- **Performance Metrics**: Win rates, average returns, hold times, and annualized returns
+
+### Strategy Details
+
+1. **Basic Buy & Hold**: Traditional buy at signal date, sell at target date
+2. **Staggered Entry**: 80% position at buy date, 20% during first week dips
+3. **Take Profit + Trailing Stop**: Take profit at 15% gain, then 15% trailing stop
+4. **Simple Trailing Stop**: 15% trailing stop from entry
+5. **Staggered Entry + Trailing Stop**: Combines staggered entry with trailing stop
+
+### Dependencies
+
+- `github.com/alpacahq/alpaca-trade-api-go/v2` - Alpaca trading API
+- `github.com/google/uuid` - UUID generation
+
+### Makefile Commands
+
+The repository includes a comprehensive Makefile for easy development and deployment:
+
 ```bash
-# Run stock backtest
-./backtest/stocks/run_backtest_stocks.sh --input example/stock_signals.csv --initial_balance 10000
+# Show all available commands
+make help
+
+# Development workflow
+make deps          # Download and tidy dependencies
+make fmt           # Format Go code
+make vet           # Run go vet
+make build         # Build the application
+make run           # Build and run
+make test          # Run tests
+make clean         # Clean build artifacts
+
+# Cross-platform builds
+make build-linux   # Build for Linux
+make build-darwin  # Build for macOS
+make build-windows # Build for Windows
+make build-all     # Build for all platforms
+
+# Data and environment
+make validate-data # Validate CSV data format
+make check-env     # Check environment variables
+
+# Development shortcuts
+make dev           # Full development workflow (deps, fmt, vet, build)
+make full-test     # Complete test workflow
 ```
 
-#### Directory Structure:
-```
-backtest/
-├── stocks/
-│   ├── backtest_stocks.py    # Main backtesting logic
-│   ├── run_backtest_stocks.sh # Execution script
-│   └── requirements.txt      # Python dependencies
-└── README.md                # Backtesting documentation
-```
+### Future Projects
 
-#### Input Format:
-Create a CSV file with the following columns:
+This repository is designed to accommodate additional projects. Each new project should follow the same structure:
+
 ```
-ticker,buy_date,sell_date,allocation_percentage
-AAPL,2023-01-01,2023-12-31,10
-MSFT,2023-01-01,2023-12-31,10
+project-name/
+├── cmd/           # Command-line applications
+├── internal/      # Internal packages
+├── data/          # Data files
+├── configs/       # Configuration files
+└── pkg/           # Public packages
 ```
 
-#### Output:
-The backtest generates a detailed report including:
-- Trade summary with individual trade details
-- Account performance metrics
-- Position tracking
-- Cash management statistics
+---
 
-### 2. Trading Bot (AWS Lambda)
-
-The trading bot runs on AWS Lambda and executes real-time trades through Alpaca Markets API. It's designed to be serverless, scalable, and cost-effective.
-
-#### Prerequisites:
-1. **Alpaca Markets Account**:
-   - Sign up for an Alpaca Markets account at https://alpaca.markets/
-   - Get your API keys (both paper trading and live trading)
-   - Enable Alpaca Markets API access
-
-2. **AWS Account**:
-   - Create an AWS account if you don't have one
-   - Set up AWS CLI and configure credentials
-
-#### AWS Setup:
-
-1. **IAM Role Creation**:
-   - Create an IAM role for Lambda execution
-   - Attach necessary policies for DynamoDB, CloudWatch, and EventBridge access
-
-2. **DynamoDB Setup**:
-   - Create a table named `trading_strategy`
-   - Use `ticker` as partition key and `buy_date` as sort key
-   - Enable on-demand capacity mode
-
-3. **Lambda Function**:
-   - Create a new Lambda function named `ArtemisTradingBot`
-   - Use Go runtime/AL2023 base image
-   - Set memory to 256MB and timeout to 5 minutes
-   - Configure environment variables:
-     ```
-     ALPACA_API_KEY=your_api_key
-     ALPACA_SECRET_KEY=your_secret_key
-     ```
-   - Deploy using `make deploy`
-
-4. **EventBridge Rules**:
-   - Create a rule to trigger Lambda at market open (12 noon ET)
-   - Set the target as the Lambda function
-
-#### Environment Setup:
-
-1. **Local Development**:
-   Create a `.env` file:
-   ```
-   ALPACA_API_KEY=your_api_key
-   ALPACA_SECRET_KEY=your_secret_key
-   ```
-
-2. **AWS Lambda**:
-   - Set environment variables in Lambda configuration
-   - Use AWS Secrets Manager for production deployments
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+*This repository is designed for educational and research purposes. Always verify results and consider transaction costs in real trading scenarios.*
