@@ -76,8 +76,20 @@ func (d *Service) LoadAllData(ctx context.Context) ([]types.Signal, *types.Alloc
 }
 
 // SaveAllData saves all data back to DynamoDB in one batch operation
-func (d *Service) SaveAllData(ctx context.Context, signals []types.Signal, allocationWindow *types.AllocationWindow) error {
+func (d *Service) SaveAllData(ctx context.Context, signals []types.Signal, signalsToDelete []types.Signal, allocationWindow *types.AllocationWindow) error {
 	var writeRequests []dynamodbtypes.WriteRequest
+
+	// Add delete requests for signals that need to be removed
+	for _, signal := range signalsToDelete {
+		writeRequests = append(writeRequests, dynamodbtypes.WriteRequest{
+			DeleteRequest: &dynamodbtypes.DeleteRequest{
+				Key: map[string]dynamodbtypes.AttributeValue{
+					"pk": &dynamodbtypes.AttributeValueMemberS{Value: "SIGNAL#" + string(signal.Status)},
+					"sk": &dynamodbtypes.AttributeValueMemberS{Value: signal.UUID.String()},
+				},
+			},
+		})
+	}
 
 	// Add signals
 	for _, signal := range signals {

@@ -18,6 +18,7 @@ type TradingBot struct {
 	alpacaService       *AlpacaService
 	notificationService *notification.DiscordNotificationService
 	signals             []types.Signal
+	signalsToDelete     []types.Signal // Track signals that need to be deleted
 	allocationWindow    *types.AllocationWindow
 	errorCount          int
 	processedCount      int
@@ -43,6 +44,7 @@ func NewTradingBot(config *Config) (*TradingBot, error) {
 		alpacaService:       alpacaService,
 		notificationService: notificationService,
 		signals:             []types.Signal{},
+		signalsToDelete:     []types.Signal{},
 		allocationWindow:    nil,
 		errorCount:          0,
 		processedCount:      0,
@@ -119,12 +121,36 @@ func (tb *TradingBot) Run(ctx context.Context) error {
 // processSignal handles a single signal based on its status
 func (tb *TradingBot) processSignal(ctx context.Context, signal *types.Signal, allocationPerSignal float64) error {
 	currentDate := time.Now().UTC().Truncate(24 * time.Hour)
+	oldStatus := signal.Status
 
 	switch signal.Status {
 	case types.SignalStatusPending:
-		return tb.processPendingSignal(ctx, signal, allocationPerSignal, currentDate)
+		err := tb.processPendingSignal(ctx, signal, allocationPerSignal, currentDate)
+		if err != nil {
+			return err
+		}
+		// If status changed, track the old state for deletion
+		if signal.Status != oldStatus {
+			// Create a copy of the signal with the old status for deletion
+			oldSignal := *signal
+			oldSignal.Status = oldStatus
+			tb.signalsToDelete = append(tb.signalsToDelete, oldSignal)
+			log.Printf("Signal %s status changed from %s to %s, will delete old record", signal.UUID, oldStatus, signal.Status)
+		}
+		return nil
 	case types.SignalStatusBought:
-		return tb.processBoughtSignal(ctx, signal, currentDate)
+		err := tb.processBoughtSignal(ctx, signal, currentDate)
+		if err != nil {
+			return err
+		}
+		// If status changed to completed, track for deletion
+		if signal.Status == types.SignalStatusCompleted {
+			// Create a copy of the signal with the current status for deletion
+			signalToDelete := *signal
+			tb.signalsToDelete = append(tb.signalsToDelete, signalToDelete)
+			log.Printf("Signal %s completed, will delete from database", signal.UUID)
+		}
+		return nil
 	default:
 		log.Printf("Unknown signal status: %s for signal %s", signal.Status, signal.UUID)
 		return nil
@@ -257,15 +283,18 @@ func (tb *TradingBot) loadData(ctx context.Context) error {
 		return fmt.Errorf("failed to load data from DynamoDB: %w", err)
 	}
 
-	// Filter to only active signals
+	// Filter to only active signals (exclude completed signals)
 	var activeSignals []types.Signal
 	for _, signal := range signals {
 		if signal.Status == types.SignalStatusPending || signal.Status == types.SignalStatusBought {
 			activeSignals = append(activeSignals, signal)
+		} else {
+			log.Printf("Skipping signal %s with status %s", signal.UUID, signal.Status)
 		}
 	}
 
 	tb.signals = activeSignals
+	tb.signalsToDelete = []types.Signal{} // Clear signals to delete at start of each run
 	tb.allocationWindow = allocationWindow
 
 	log.Printf("Loaded %d active signals and allocation window", len(activeSignals))
@@ -282,12 +311,12 @@ func (tb *TradingBot) saveData(ctx context.Context) error {
 		}
 	}
 
-	err := tb.dbService.SaveAllData(ctx, activeSignals, tb.allocationWindow)
+	err := tb.dbService.SaveAllData(ctx, activeSignals, tb.signalsToDelete, tb.allocationWindow)
 	if err != nil {
 		return fmt.Errorf("failed to save data to DynamoDB: %w", err)
 	}
 
-	log.Printf("Saved %d active signals and allocation window to DynamoDB", len(activeSignals))
+	log.Printf("Saved %d active signals, deleted %d signals, and allocation window to DynamoDB", len(activeSignals), len(tb.signalsToDelete))
 	return nil
 }
 
