@@ -4,13 +4,14 @@ Artemis is an automated stock trading bot that executes trades based on predefin
 
 ## Features
 
-- **Automated Trading**: Executes buy and sell orders based on signal dates
+- **Automated Trading**: Executes buy and sell orders based on signal dates using market orders for guaranteed execution
 - **Fair Allocation**: Uses a rolling window approach to allocate funds fairly across signals
 - **AWS Integration**: Designed to run on AWS Lambda with DynamoDB storage
 - **Signal Management**: Comprehensive signal tracking and management
 - **Paper Trading Support**: Supports both paper and live trading environments
 - **Discord Notifications**: Real-time notifications for trades, errors, and account status
 - **Single Table Design**: Efficient DynamoDB usage with unified table architecture
+- **Multi-Daily Execution**: Runs 3 times daily for optimal signal execution timing
 
 ## Architecture
 
@@ -122,8 +123,18 @@ go run cmd/main.go
 
 The bot automatically processes signals based on their status:
 
-1. **PENDING**: If current date >= buy date, calculates allocation and buys the stock
-2. **BOUGHT**: If current date >= sell date, sells the stock and calculates P&L
+1. **PENDING**: If current date >= buy date, calculates allocation and buys the stock using market orders
+2. **BOUGHT**: If current date >= sell date, sells the stock using market orders and calculates P&L
+
+### Execution Strategy
+
+The bot runs **3 times daily** for optimal signal execution:
+
+- **10:00 AM EST**: Morning execution - handles both new buys and sell orders
+- **12:30 PM EST**: Mid-day execution - handles new buy signals added during morning
+- **2:30 PM EST**: Afternoon execution - handles new buy signals added during lunch/mid-day
+
+**Market Orders**: All orders use market orders for guaranteed execution, ensuring no missed trades due to price movement or volatility.
 
 ### Allocation Strategy
 
@@ -137,7 +148,10 @@ The bot uses a rolling 90-day window approach:
 
 ### Lambda Function
 
-The bot is designed to run as an AWS Lambda function triggered daily before market close.
+The bot is designed to run as an AWS Lambda function triggered 3 times daily via EventBridge Scheduler:
+- **10:00 AM EST**: Morning execution
+- **12:30 PM EST**: Mid-day execution  
+- **2:30 PM EST**: Afternoon execution
 
 ### DynamoDB Table
 
@@ -150,8 +164,8 @@ The bot is designed to run as an AWS Lambda function triggered daily before mark
 
 The bot sends real-time notifications to Discord for:
 - **Bot Start/Complete**: When the bot begins and finishes processing
-- **Signal Bought**: Details of executed buy orders
-- **Signal Sold**: Trade completion with profit/loss information
+- **Signal Bought**: Details of executed buy orders with actual fill prices
+- **Signal Sold**: Trade completion with profit/loss information and actual fill prices
 - **Account Status**: Current account value, cash balance, and active signals
 - **Errors**: Detailed error notifications with context
 
@@ -159,6 +173,35 @@ To enable Discord notifications:
 1. Create a Discord webhook in your server
 2. Set the `DISCORD_WEBHOOK_URL` environment variable
 3. The bot will automatically send notifications for all events
+
+## Execution Strategy & Cost Analysis
+
+### Why Market Orders?
+
+The bot uses **market orders** for all trades to ensure:
+- **Guaranteed Execution**: No missed trades due to price movement
+- **Immediate Fills**: Orders execute at current market price
+- **No End-of-Day Cancellations**: Market orders fill immediately
+- **Perfect for Volatile Markets**: Ideal for earnings/news days
+
+### Why 3x Daily Execution?
+
+Running 3 times daily provides:
+- **Multiple Execution Windows**: Catch signals added throughout the day
+- **Mid-Day Signal Support**: Execute signals added during lunch/mid-day
+- **Risk Management**: Multiple opportunities to enter positions
+- **Consistent Sell Timing**: All sell orders execute in the morning run
+
+### AWS Cost Analysis
+
+**Monthly Costs (us-east-2):**
+- **1x daily**: $0.000175/month
+- **2x daily**: $0.000349/month  
+- **3x daily**: $0.000524/month
+
+**Annual Cost**: Less than $0.01/year regardless of execution frequency.
+
+The cost is negligible, allowing focus on execution quality rather than cost optimization.
 
 ## Development
 
@@ -198,10 +241,11 @@ go build -o artemis-bot cmd/main.go
 ## Monitoring and Logging
 
 The bot provides comprehensive logging for:
-- Signal processing status
-- Trade execution details
+- Signal processing status across all 3 daily runs
+- Market order execution details with actual fill prices
 - Allocation window updates
-- Error conditions
+- Error conditions and retry logic
+- Execution timing and performance metrics
 
 ## Security Considerations
 
