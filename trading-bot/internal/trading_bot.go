@@ -176,21 +176,34 @@ func (tb *TradingBot) processPendingSignal(ctx context.Context, signal *types.Si
 
 	// Get order details
 	shares, _ := order.Qty.Float64()
-	limitPrice, _ := order.LimitPrice.Float64()
+
+	// For market orders, get the actual execution price from the order
+	// Market orders execute immediately, so the filled average price should be available
+	var executionPrice float64
+	if order.FilledAvgPrice != nil {
+		executionPrice, _ = order.FilledAvgPrice.Float64()
+	} else {
+		// Fallback to current price if filled average price is not available yet
+		executionPrice, err = tb.alpacaService.GetCurrentPrice(ctx, signal.Ticker)
+		if err != nil {
+			log.Printf("Warning: Could not get execution price for %s: %v", signal.Ticker, err)
+			executionPrice = 0
+		}
+	}
 
 	if shares > 0 {
 		signal.NumStocks = shares
-		signal.BuyPrice = limitPrice
+		signal.BuyPrice = executionPrice
 		signal.Status = types.SignalStatusBought
 		signal.UpdatedAt = time.Now()
 
 		// Signal is already updated in memory, will be saved at the end
 
 		// Send Discord notification
-		tb.notificationService.NotifySignalBought(signal.Ticker, shares, limitPrice, signal.BuyDate, signal.SellDate)
+		tb.notificationService.NotifySignalBought(signal.Ticker, shares, executionPrice, signal.BuyDate, signal.SellDate)
 
-		log.Printf("Successfully placed buy order for %f shares of %s at $%.2f for signal %s",
-			shares, signal.Ticker, limitPrice, signal.UUID)
+		log.Printf("Successfully placed market buy order for %f shares of %s at $%.2f for signal %s",
+			shares, signal.Ticker, executionPrice, signal.UUID)
 	} else {
 		log.Printf("Warning: Could not determine shares from order for signal %s", signal.UUID)
 	}
@@ -215,21 +228,31 @@ func (tb *TradingBot) processBoughtSignal(ctx context.Context, signal *types.Sig
 		return fmt.Errorf("failed to sell stock for signal %s: %w", signal.UUID, err)
 	}
 
-	// Get order details
-	limitPrice, _ := order.LimitPrice.Float64()
+	// Get order details - for market orders, get the actual execution price from the order
+	var executionPrice float64
+	if order.FilledAvgPrice != nil {
+		executionPrice, _ = order.FilledAvgPrice.Float64()
+	} else {
+		// Fallback to current price if filled average price is not available yet
+		executionPrice, err = tb.alpacaService.GetCurrentPrice(ctx, signal.Ticker)
+		if err != nil {
+			log.Printf("Warning: Could not get execution price for %s: %v", signal.Ticker, err)
+			executionPrice = 0
+		}
+	}
 
 	// Calculate profit/loss
 	var profitLoss, profitLossPct float64
-	if signal.BuyPrice > 0 && limitPrice > 0 {
-		profitLoss = (limitPrice - signal.BuyPrice) * signal.NumStocks
-		profitLossPct = ((limitPrice - signal.BuyPrice) / signal.BuyPrice) * 100
+	if signal.BuyPrice > 0 && executionPrice > 0 {
+		profitLoss = (executionPrice - signal.BuyPrice) * signal.NumStocks
+		profitLossPct = ((executionPrice - signal.BuyPrice) / signal.BuyPrice) * 100
 	}
 
 	// Calculate duration
 	duration := int(currentDate.Sub(signal.BuyDate).Hours() / 24)
 
 	// Send Discord notification
-	tb.notificationService.NotifySignalSold(signal.Ticker, signal.NumStocks, limitPrice, signal.BuyPrice, profitLoss, profitLossPct, duration)
+	tb.notificationService.NotifySignalSold(signal.Ticker, signal.NumStocks, executionPrice, signal.BuyPrice, profitLoss, profitLossPct, duration)
 
 	// Log the trade result
 	log.Printf("Trade completed - Signal: %s, Ticker: %s, P&L: $%.2f (%.2f%%), Duration: %d days",

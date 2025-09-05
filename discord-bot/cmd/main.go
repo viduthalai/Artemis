@@ -300,21 +300,6 @@ func handleAddSignalCommand(ctx context.Context, interaction *DiscordInteraction
 				Components: []DiscordComponent{
 					{
 						Type:        ComponentTypeTextInput,
-						CustomID:    "buy_date",
-						Label:       "Buy Date (YYYY-MM-DD)",
-						Style:       TextInputStyleShort,
-						Required:    true,
-						MinLength:   10,
-						MaxLength:   10,
-						Placeholder: "2024-01-15",
-					},
-				},
-			},
-			{
-				Type: ComponentTypeActionRow,
-				Components: []DiscordComponent{
-					{
-						Type:        ComponentTypeTextInput,
 						CustomID:    "sell_date",
 						Label:       "Sell Date (YYYY-MM-DD)",
 						Style:       TextInputStyleShort,
@@ -375,7 +360,7 @@ func handleModalSubmit(ctx context.Context, interaction *DiscordInteraction) (ev
 
 func handleSignalModalSubmit(ctx context.Context, interaction *DiscordInteraction) (events.LambdaFunctionURLResponse, error) {
 	// Extract form data from data.components
-	var ticker, buyDateStr, sellDateStr string
+	var ticker, sellDateStr string
 
 	if interaction.Data == nil || len(interaction.Data.Components) == 0 {
 		return events.LambdaFunctionURLResponse{
@@ -397,8 +382,6 @@ func handleSignalModalSubmit(ctx context.Context, interaction *DiscordInteractio
 				switch subComponent.CustomID {
 				case "ticker":
 					ticker = subComponent.Value
-				case "buy_date":
-					buyDateStr = subComponent.Value
 				case "sell_date":
 					sellDateStr = subComponent.Value
 				}
@@ -406,10 +389,10 @@ func handleSignalModalSubmit(ctx context.Context, interaction *DiscordInteractio
 		}
 	}
 
-	log.Printf("Extracted values: ticker=%s, buy_date=%s, sell_date=%s", ticker, buyDateStr, sellDateStr)
+	log.Printf("Extracted values: ticker=%s, sell_date=%s", ticker, sellDateStr)
 
 	// Validate input
-	if ticker == "" || buyDateStr == "" || sellDateStr == "" {
+	if ticker == "" || sellDateStr == "" {
 		response := DiscordResponse{
 			Type: ResponseTypeChannelMessageWithSource,
 			Data: &DiscordResponseData{
@@ -420,19 +403,7 @@ func handleSignalModalSubmit(ctx context.Context, interaction *DiscordInteractio
 		return createResponse(response)
 	}
 
-	// Parse dates
-	buyDate, err := time.Parse("2006-01-02", buyDateStr)
-	if err != nil {
-		response := DiscordResponse{
-			Type: ResponseTypeChannelMessageWithSource,
-			Data: &DiscordResponseData{
-				Content: "❌ Error: Invalid buy date format. Use YYYY-MM-DD",
-				Flags:   ResponseFlagEphemeral,
-			},
-		}
-		return createResponse(response)
-	}
-
+	// Parse sell date
 	sellDate, err := time.Parse("2006-01-02", sellDateStr)
 	if err != nil {
 		response := DiscordResponse{
@@ -445,12 +416,15 @@ func handleSignalModalSubmit(ctx context.Context, interaction *DiscordInteractio
 		return createResponse(response)
 	}
 
-	// Validate date logic
-	if buyDate.After(sellDate) {
+	// Set buy date to current date
+	buyDate := time.Now().Truncate(24 * time.Hour) // Truncate to start of day
+
+	// Validate date logic - sell date should be today or in the future
+	if sellDate.Before(buyDate) {
 		response := DiscordResponse{
 			Type: ResponseTypeChannelMessageWithSource,
 			Data: &DiscordResponseData{
-				Content: "❌ Error: Buy date must be before sell date",
+				Content: "❌ Error: Sell date must be today or in the future",
 				Flags:   ResponseFlagEphemeral,
 			},
 		}
@@ -491,7 +465,7 @@ func handleSignalModalSubmit(ctx context.Context, interaction *DiscordInteractio
 		Data: &DiscordResponseData{
 			Content: fmt.Sprintf("✅ **Signal Added Successfully!**\n"+
 				"**Ticker:** %s\n"+
-				"**Buy Date:** %s\n"+
+				"**Buy Date:** %s (Today)\n"+
 				"**Sell Date:** %s\n"+
 				"**Status:** Pending\n"+
 				"**UUID:** %s",

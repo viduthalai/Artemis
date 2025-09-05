@@ -138,18 +138,14 @@ func (a *AlpacaService) BuyStock(ctx context.Context, ticker string, allocation 
 		log.Printf("Rounded down to %f whole shares for non-fractionable ticker %s", shares, ticker)
 	}
 
-	// Create the buy order with limit price at 99% of ask price
+	// Create the buy order as a market order for guaranteed execution
 	qty := decimal.NewFromFloat(shares)
-	// Round limit price to 2 decimal places to meet Alpaca's pricing requirements
-	limitPriceValue := math.Round(currentPrice*0.99*100) / 100
-	limitPrice := decimal.NewFromFloat(limitPriceValue)
 	orderRequest := alpaca.PlaceOrderRequest{
 		AssetKey:    &ticker,
 		Qty:         &qty,
 		Side:        alpaca.Buy,
-		Type:        alpaca.Limit,
+		Type:        alpaca.Market,
 		TimeInForce: alpaca.Day,
-		LimitPrice:  &limitPrice,
 	}
 
 	order, err := a.client.PlaceOrder(orderRequest)
@@ -157,7 +153,7 @@ func (a *AlpacaService) BuyStock(ctx context.Context, ticker string, allocation 
 		return nil, fmt.Errorf("failed to place buy order for %s: %w", ticker, err)
 	}
 
-	log.Printf("Placed buy order for %s: %f shares at limit price $%.2f", ticker, shares, limitPriceValue)
+	log.Printf("Placed market buy order for %s: %f shares", ticker, shares)
 	return order, nil
 }
 
@@ -173,24 +169,14 @@ func (a *AlpacaService) SellStock(ctx context.Context, ticker string, quantity f
 		return nil, fmt.Errorf("insufficient shares to sell: have %.2f, trying to sell %.2f", currentPosition, quantity)
 	}
 
-	// Get current bid price for limit order
-	bidPrice, err := a.GetBidPrice(ctx, ticker)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get bid price for %s: %w", ticker, err)
-	}
-
-	// Create the sell order with limit price at 101% of bid price
+	// Create the sell order as a market order for guaranteed execution
 	qty := decimal.NewFromFloat(quantity)
-	// Round limit price to 2 decimal places to meet Alpaca's pricing requirements
-	limitPriceValue := math.Round(bidPrice*1.01*100) / 100
-	limitPrice := decimal.NewFromFloat(limitPriceValue)
 	orderRequest := alpaca.PlaceOrderRequest{
 		AssetKey:    &ticker,
 		Qty:         &qty,
 		Side:        alpaca.Sell,
-		Type:        alpaca.Limit,
-		TimeInForce: alpaca.GTC, // Good Till Canceled - ensures the order stays active until filled or manually canceled
-		LimitPrice:  &limitPrice,
+		Type:        alpaca.Market,
+		TimeInForce: alpaca.Day, // Changed from GTC to Day since market orders execute immediately
 	}
 
 	order, err := a.client.PlaceOrder(orderRequest)
@@ -198,7 +184,7 @@ func (a *AlpacaService) SellStock(ctx context.Context, ticker string, quantity f
 		return nil, fmt.Errorf("failed to place sell order for %s: %w", ticker, err)
 	}
 
-	log.Printf("Placed sell order for %s: %f shares at limit price $%.2f", ticker, quantity, bidPrice*1.05)
+	log.Printf("Placed market sell order for %s: %f shares", ticker, quantity)
 	return order, nil
 }
 
